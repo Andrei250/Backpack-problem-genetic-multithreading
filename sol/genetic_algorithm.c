@@ -13,55 +13,6 @@
        __typeof__ (b) _b = (b); \
      _a < _b ? _a : _b; })
 
-int pthread_barrier_init(pthread_barrier_t *barrier, const pthread_barrierattr_t *attr, unsigned int count)
-{
-    if(count == 0)
-    {
-        errno = EINVAL;
-        return -1;
-    }
-    if(pthread_mutex_init(&barrier->mutex, 0) < 0)
-    {
-        return -1;
-    }
-    if(pthread_cond_init(&barrier->cond, 0) < 0)
-    {
-        pthread_mutex_destroy(&barrier->mutex);
-        return -1;
-    }
-    barrier->tripCount = count;
-    barrier->count = 0;
-
-    return 0;
-}
-
-int pthread_barrier_destroy(pthread_barrier_t *barrier)
-{
-    pthread_cond_destroy(&barrier->cond);
-    pthread_mutex_destroy(&barrier->mutex);
-    return 0;
-}
-
-int pthread_barrier_wait(pthread_barrier_t *barrier)
-{
-    pthread_mutex_lock(&barrier->mutex);
-    ++(barrier->count);
-    if(barrier->count >= barrier->tripCount)
-    {
-        barrier->count = 0;
-        pthread_cond_broadcast(&barrier->cond);
-        pthread_mutex_unlock(&barrier->mutex);
-        return 1;
-    }
-    else
-    {
-        pthread_cond_wait(&barrier->cond, &(barrier->mutex));
-        pthread_mutex_unlock(&barrier->mutex);
-        return 0;
-    }
-}
-
-
 int read_input(sack_object **objects, int *object_count, int *sack_capacity, int *generations_count, int *numberOfThreads, int argc, char *argv[])
 {
 	FILE *fp;
@@ -240,13 +191,14 @@ void free_generation(individual *generation)
 
 void run_genetic_algorithm(const sack_object *objects, int object_count, int generations_count, int sack_capacity, int numberOfThreads)
 {
+	// same instances for each thread
 	individual *current_generation = (individual*) calloc(object_count, sizeof(individual));
 	individual *next_generation = (individual*) calloc(object_count, sizeof(individual));
 	pthread_t threads[numberOfThreads];
 	thread_arg arguments[numberOfThreads];
 	void *status;
 	int r;
-	pthread_barrier_t barrier;
+	pthread_barrier_t barrier; // barrier for each thread ( the same instance )
 
 	r = pthread_barrier_init(&barrier, NULL, numberOfThreads);
 
@@ -255,6 +207,7 @@ void run_genetic_algorithm(const sack_object *objects, int object_count, int gen
 		exit(1);
 	}
 
+	// initialize each thread arguments
 	for (int i = 0; i < numberOfThreads; ++i) {
 		arguments[i].id = i;
 		arguments[i].threads = numberOfThreads;
@@ -266,6 +219,7 @@ void run_genetic_algorithm(const sack_object *objects, int object_count, int gen
 		arguments[i].next_generation = next_generation;
 		arguments[i].barrier = &barrier;
 
+		// open thread
 		r = pthread_create(&threads[i], NULL, computeSolution, (void *) &arguments[i]);
  
         if (r) {
@@ -274,6 +228,8 @@ void run_genetic_algorithm(const sack_object *objects, int object_count, int gen
         }
 	}
 
+	// join thread
+	// function took from the lab files
 	for (int i = 0; i < numberOfThreads; i++) {
         r = pthread_join(threads[i], &status);
  
@@ -309,6 +265,7 @@ void *computeSolution(void *arg) {
 	int cursor, count;
 	individual *tmp = NULL;
 
+	// make first generation from each thread for each object
 	for (int i = start; i < stop; ++i) {
 		thread.current_generation[i].fitness = 0;
 		thread.current_generation[i].chromosomes = (int*) calloc(N, sizeof(int));
@@ -324,19 +281,27 @@ void *computeSolution(void *arg) {
 
 	pthread_barrier_wait(thread.barrier);
 
+	// go generations_count times to compute final generation
 	for (int k = 0; k < thread.generations_count; ++k) {
-		// if (id == 0) {
-		// 	print_generation(thread.current_generation, N);
-		// }
-
 		cursor = 0;
-		int startGeneration, stopGeneration;
+		int startGeneration, stopGeneration; // variables used for computing 30%, 20% for the best generation
 
-		compute_fitness_function(thread.objects, thread.current_generation, start, stop, thread.sack_capacity);
+		// compute fitness per each thread
+		compute_fitness_function(thread.objects, thread.current_generation, start, stop, thread.sack_capacity); 
 		pthread_barrier_wait(thread.barrier);
 
+		// qsort per each chunk on each thread
+		qsort(thread.current_generation + start, stop - start, sizeof(individual), cmpfunc);
+		pthread_barrier_wait(thread.barrier);
+
+		// onyl 1 thread will merge all P chunks, where P is the nubmer of threads
 		if (id == 0) {
-			qsort(thread.current_generation, N, sizeof(individual), cmpfunc);
+			for (int i = 1; i <	P; ++i) {
+				int beginning = i * (double) N / P;
+				int ending = min((i + 1) * (double) N / P, N);
+
+				memcpy(thread.current_generation, merge(thread.current_generation, 0, beginning, ending), ending * sizeof(individual));
+			}
 		}
 
 		pthread_barrier_wait(thread.barrier);
@@ -352,6 +317,7 @@ void *computeSolution(void *arg) {
 		cursor = count;
 		// mutate first 20% children with the first version of bit string mutation
 		count = N * 2 / 10;
+		// start and stop for each thread
 		startGeneration = id * (double) count / P;
 		stopGeneration = min((id + 1) * (double) count / P, count);
 
@@ -418,12 +384,21 @@ void *computeSolution(void *arg) {
 		pthread_barrier_wait(thread.barrier);
 	}
 
+	// compute for the last operation the fitness and sort them
 	compute_fitness_function(thread.objects, thread.current_generation, start, stop, thread.sack_capacity);
 
 	pthread_barrier_wait(thread.barrier);
 
+	qsort(thread.current_generation + start, stop - start, sizeof(individual), cmpfunc);
+	pthread_barrier_wait(thread.barrier);
+
 	if (id == 0) {
-		qsort(thread.current_generation, N, sizeof(individual), cmpfunc);
+		for (int i = 1; i <	P; ++i) {
+			int beginning = i * (double) N / P;
+			int ending = min((i + 1) * (double) N / P, N);
+
+			memcpy(thread.current_generation, merge(thread.current_generation, 0, beginning, ending), ending * sizeof(individual));
+		}
 	}
 
 	pthread_barrier_wait(thread.barrier);
@@ -432,9 +407,25 @@ void *computeSolution(void *arg) {
 		print_best_fitness(thread.current_generation);
 	}
 
-	// if (id == 0) {
-	// 	print_generation(thread.current_generation, N);
-	// }
-
 	return NULL;
+}
+
+// same function from the lab3
+individual *merge(individual *source, int start, int mid, int end) {
+	int iA = start;
+	int iB = mid;
+	int i;
+	individual* tmp = (individual*) malloc(sizeof(individual) * (end - start));
+
+	for (i = start; i < end; i++) {
+		if (end == iB || (iA < mid && cmpfunc(&source[iA], &source[iB]) <= 0)) {
+			tmp[i] = source[iA];
+			iA++;
+		} else {
+			tmp[i] = source[iB];
+			iB++;
+		}
+	}
+
+	return tmp;
 }

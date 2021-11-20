@@ -153,7 +153,7 @@ do
 done
 
 # se ruleaza implementarea paralela pe diferite combinatii de numar de thread-uri
-for P in 2 3 
+for P in 2 3 4
 do
 	echo "Se ruleaza testele pentru P=$P..."
 

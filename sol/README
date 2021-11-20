@@ -1,0 +1,39 @@
+Dumitrescu Andrei 333CC
+
+Informatii de implementare.
+    - am copiat functiiile din skel si le-am modificat pentru a realiza
+        paralelizarea
+    - in functia run_genetic_algorithm doar initializez generatiile si
+        un array de argumente pasate threadurilor
+    - tot in run_genetic_algorithm creez si fac join la threaduri
+    - am o bariera care are aceeasi instanta pe fiecare thread, la fel 
+        ca generatia curenta si viitoare
+    - functia computeSolution realizeaza rezolvarea problemei
+    - am pornit de la scheletul oferit si am paralelizat informatie cu
+        informatie
+    - am retinut comentariile din codul serializat
+    - pentru quicksort, am apelat quicksort pe fiecare bucata din
+        current_generation asignata unui thread
+    - am calculat fitness-ul pentru fiecare generatie, impartind
+        generatia pe threaduri si apralelizand calculele
+    - apoi pentru a aplica mutate_bit_1 si 2 si celalalte operatii
+        am calculat count si am impartit pe threaduri intervalul
+        [0, count] pentru fiecare operatie
+    - la crossover, in cazul in care count era impar, doar 
+        de pe threadul 0 faceam salvarea ultimului cromozom
+    - apoi, daca startGeneration si stopGeneratione rau impare, scadeam
+        1 pentru a el face pare, aplicand forul din 2 in 2. Am ajuns la
+        aceasta abordare, deoarece intervalele se suprapuneau. astfel
+        daca stopGeneration era impart, atunci si startul urmatorului
+        thread era tot impar si se scadeau amandoua.
+        threadul 0 mereu pornea de la 0.
+    - afisarile se realizau doar de pe threadul 0 
+    - dupa fiecare operatie (mai ales foruri) paralelizata, puneam bariera,
+        deoarece am folosit aceleasi threaduri pentru realizarea intregilor
+        operatii. Astfel dupa ce calculam ceva, aveam nevoie de toata
+        informatia pentru a trece la pasul urmator. In caz contrar,
+        raspunsul era invalid
+    - functia merge este luata din laboratorul 3 si adaptata la aceasta
+        problema
+
+Limbaj folosit: C

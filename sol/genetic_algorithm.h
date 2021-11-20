@@ -4,16 +4,15 @@
 #include "sack_object.h"
 #include "individual.h"
 #include <pthread.h>
-#include <errno.h>
 
-typedef int pthread_barrierattr_t;
-typedef struct
-{
-    pthread_mutex_t mutex;
-    pthread_cond_t cond;
-    int count;
-    int tripCount;
-} pthread_barrier_t;
+// typedef int pthread_barrierattr_t;
+// typedef struct
+// {
+//     pthread_mutex_t mutex;
+//     pthread_cond_t cond;
+//     int count;
+//     int tripCount;
+// } pthread_barrier_t;
 
 typedef struct _thread_arg {
     int id;
@@ -24,9 +23,9 @@ typedef struct _thread_arg {
     pthread_barrier_t* barrier;
 } thread_arg;
 
-int pthread_barrier_wait(pthread_barrier_t *barrier);
-int pthread_barrier_destroy(pthread_barrier_t *barrier);
-int pthread_barrier_init(pthread_barrier_t *barrier, const pthread_barrierattr_t *attr, unsigned int count);
+// int pthread_barrier_wait(pthread_barrier_t *barrier);
+// int pthread_barrier_destroy(pthread_barrier_t *barrier);
+// int pthread_barrier_init(pthread_barrier_t *barrier, const pthread_barrierattr_t *attr, unsigned int count);
 
 // reads input from a given file
 int read_input(sack_object **objects, int *object_count, int *sack_capacity, int *generations_count, int *numberOfThreads, int argc, char *argv[]);
@@ -66,5 +65,7 @@ void run_genetic_algorithm(const sack_object *objects, int object_count, int gen
 
 // thread function to run genetic algorithm
 void *computeSolution(void *arg);
+
+individual *merge(individual *source, int start, int mid, int end);
 
 #endif
